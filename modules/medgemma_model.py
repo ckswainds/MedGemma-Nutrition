@@ -25,7 +25,6 @@ class MedGemmaModel:
         """Initialize the MedGemma model with LangChain-Ollama integration."""
         self.ollama_model = os.getenv('OLLAMA_MODEL', 'MedAIBase/MedGemma1.5:4b')
         self.ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
-        # Increased temperature slightly for more creative/natural plans
         self.temperature = float(os.getenv('MODEL_TEMPERATURE', '0.4')) 
         self.top_p = float(os.getenv('MODEL_TOP_P', '0.9'))
         self.top_k = int(os.getenv('MODEL_TOP_K', '50'))
@@ -83,9 +82,7 @@ class MedGemmaModel:
         context: Optional[str] = None,
         strict_mode: bool = False,
     ) -> str:
-        """Create a FLEXIBLE prompt that lets the AI decide the structure."""
-        
-        # Extract Basic Info
+        """Create a nutrition advice prompt with patient data and clinical context."""
         name = patient_data.get('name', 'Patient')
         age = patient_data.get('age', 'Not specified')
         gender = patient_data.get('gender', 'Not specified')
@@ -93,7 +90,6 @@ class MedGemmaModel:
         condition = patient_data.get('condition', 'General Health')
         goal = patient_data.get('health_goal', 'Better Health')
         
-        # Extract Clinical Metrics
         metrics_str = "None"
         raw_metrics = patient_data.get('specific_metrics', {})
         if isinstance(raw_metrics, str):
@@ -108,8 +104,7 @@ class MedGemmaModel:
         # --- THE FLEXIBLE SYSTEM PROMPT ---
         system_prompt = f"""You are Dr. MedGemma, an expert Clinical Nutritionist specializing in Indian diets.
 
-PATIENT PROFILE:
-- Name: {name} ({age}y / {gender})
+PATIENT {name} ({age}y / {gender})
 - Condition: {condition} (CRITICAL)
 - Markers: {metrics_str}
 - Goal: {goal}

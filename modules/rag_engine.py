@@ -23,7 +23,6 @@ class RAGEngine:
         
         self._initialize_embeddings()
         
-        # LOGIC CHANGE: Only load PDFs if explicitly requested OR if DB is empty
         if load_documents:
             logger.info("♻️  Force reload requested. Re-indexing documents...")
             self._initialize_vector_store()
@@ -101,10 +100,7 @@ class RAGEngine:
             logger.info("Vector store initialized")
 
     def _get_category_from_filename(self, filename: str) -> str:
-        """
-        SMART TAGGING SYSTEM: Auto-assigns disease categories based on filename.
-        This ensures '03_Diabetes_Guidelines.pdf' gets tagged as 'diabetes'.
-        """
+        """Assign disease category based on filename."""
         fname = filename.lower()
         if "diabetes" in fname: return "diabetes"
         if "hypertension" in fname or "blood_pressure" in fname: return "hypertension"
@@ -119,9 +115,7 @@ class RAGEngine:
         """
         Load and process PDF files into vector store with SMART METADATA TAGGING.
         """
-        if not os.path.exists(self.guidelines_path):
-            os.makedirs(self.guidelines_path)
-            logger.info(f"Created guidelines directory: {self.guidelines_path}")
+        if Load and process PDF files into vector store with metadata tagging.    logger.info(f"Created guidelines directory: {self.guidelines_path}")
         
         pdf_files = list(Path(self.guidelines_path).glob("*.pdf"))
         
@@ -141,9 +135,8 @@ class RAGEngine:
                 
                 # --- UPGRADED METADATA TAGGING ---
                 category = self._get_category_from_filename(pdf_file.name)
-                logger.info(f"   👉 Tagging as: [{category.upper()}]")
-                
-                for doc in documents:
+                category = self._get_category_from_filename(pdf_file.name)
+                logger.info(f"  s:
                     doc.metadata["source"] = pdf_file.name
                     doc.metadata["category"] = category  
                 
@@ -175,7 +168,6 @@ class RAGEngine:
             # Optimized chunking for Medical Text (Context preservation)
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=1000,
-                chunk_overlap=200,
                 separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""]
             )
             
@@ -186,9 +178,6 @@ class RAGEngine:
             if self.vector_store is not None:
                 # Optional: Reset DB if doing a full reload (prevents duplicates)
                 # self.vector_store.delete_collection() 
-                
-                logger.info("Adding documents to vector store...")
-                self.vector_store.add_documents(split_docs)
                 logger.info("Documents successfully stored in vector database")
             else:
                 logger.warning("Vector store not available. Documents not stored")
@@ -204,21 +193,12 @@ class RAGEngine:
         
         IMPROVEMENT: Since we added 'category' metadata, the semantic search
         will now naturally prioritize documents that align with the disease terms
-        in the user query, but we still rely on similarity search to keep it flexible.
-        """
+        in Retrieve relevant documents from vector store using similarity search."""
         if self.vector_store is None:
             logger.warning("Vector store not available.")
             return self._get_default_guidance(query), []
         
         try:
-            # logger.info(f"Retrieving context for query: {query}")
-            
-            # Perform similarity search
-            retrieved_docs = self.vector_store.similarity_search(
-                query=query,
-                k=max_results
-            )
-            
             if not retrieved_docs:
                 return self._get_default_guidance(query), []
             
@@ -235,8 +215,7 @@ class RAGEngine:
             return self._get_default_guidance(query), []
     
     def _get_default_guidance(self, query: str) -> str:
-        """Provide default nutrition guidance when vector store is unavailable."""
-        return "Please refer to standard medical guidelines."
+        """Prn "Please refer to standard medical guidelines."
 
 
 # --- SINGLETON INSTANCE MANAGEMENT ---
@@ -253,8 +232,6 @@ def get_rag_engine(load_documents: bool = False) -> RAGEngine:
         if load_documents:
             logger.info("🔄 Reload requested on existing engine.")
             _rag_instance.load_pdf_guidelines()
-        return _rag_instance
-    
     logger.info("✨ Creating new RAGEngine instance...")
     _rag_instance = RAGEngine(load_documents=load_documents)
     return _rag_instance
