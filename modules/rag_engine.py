@@ -113,9 +113,10 @@ class RAGEngine:
 
     def load_pdf_guidelines(self) -> bool:
         """
-        Load and process PDF files into vector store with SMART METADATA TAGGING.
+        Load and process PDF files into vector store with metadata tagging.
         """
-        if Load and process PDF files into vector store with metadata tagging.    logger.info(f"Created guidelines directory: {self.guidelines_path}")
+        os.makedirs(self.guidelines_path, exist_ok=True)
+        logger.info(f"Created guidelines directory: {self.guidelines_path}")
         
         pdf_files = list(Path(self.guidelines_path).glob("*.pdf"))
         
@@ -133,12 +134,11 @@ class RAGEngine:
                 loader = PyMuPDFLoader(str(pdf_file))
                 documents = loader.load()
                 
-                # --- UPGRADED METADATA TAGGING ---
+                # Add metadata to each document
                 category = self._get_category_from_filename(pdf_file.name)
-                category = self._get_category_from_filename(pdf_file.name)
-                logger.info(f"  s:
+                for doc in documents:
                     doc.metadata["source"] = pdf_file.name
-                    doc.metadata["category"] = category  
+                    doc.metadata["category"] = category
                 
                 all_documents.extend(documents)
             
@@ -178,7 +178,9 @@ class RAGEngine:
             if self.vector_store is not None:
                 # Optional: Reset DB if doing a full reload (prevents duplicates)
                 # self.vector_store.delete_collection() 
-                logger.info("Documents successfully stored in vector database")
+                logger.info(f"Adding {len(split_docs)} document chunks to vector store...")
+                self.vector_store.add_documents(split_docs)
+                logger.info("✓ Documents successfully stored in vector database")
             else:
                 logger.warning("Vector store not available. Documents not stored")
                 
@@ -191,31 +193,45 @@ class RAGEngine:
         """
         Retrieve relevant documents from vector store using similarity search.
         
-        IMPROVEMENT: Since we added 'category' metadata, the semantic search
-        will now naturally prioritize documents that align with the disease terms
-        in Retrieve relevant documents from vector store using similarity search."""
+        Args:
+            query: Search query string
+            max_results: Maximum number of results to retrieve
+            
+        Returns:
+            Tuple of (formatted_context, list_of_documents)
+        """
         if self.vector_store is None:
-            logger.warning("Vector store not available.")
-            return self._get_default_guidance(query), []
+            logger.warning("❌ Vector store not available. Initialize embeddings first.")
+            return self._get_default_guidance("Vector store unavailable"), []
         
         try:
+            # Perform similarity search on query
+            logger.debug(f"Searching for: '{query}'")
+            retrieved_docs = self.vector_store.similarity_search(query, k=max_results)
+            
             if not retrieved_docs:
+                logger.warning(f"⚠️  No clinical documents found for query: '{query}'")
+                logger.info("💡 Tip: Ensure PDF guidelines are loaded in data/chroma_db")
                 return self._get_default_guidance(query), []
+            
+            logger.info(f"✓ Retrieved {len(retrieved_docs)} relevant documents")
             
             # Format context with source citation
             serialized_context = "\n\n".join(
-                f"[Source: {doc.metadata.get('source', 'Unknown')} | Tag: {doc.metadata.get('category', 'General')}]\n{doc.page_content}"
+                f"[Source: {doc.metadata.get('source', 'Unknown')} | Category: {doc.metadata.get('category', 'General')}]\n{doc.page_content}"
                 for doc in retrieved_docs
             )
             
             return serialized_context, retrieved_docs
             
         except Exception as e:
-            logger.error(f"Context retrieval error: {e}")
+            logger.error(f"❌ Context retrieval error: {e}")
             return self._get_default_guidance(query), []
     
     def _get_default_guidance(self, query: str) -> str:
-        """Prn "Please refer to standard medical guidelines."
+        """Provide default guidance when no documents are available."""
+        db_status = "not initialized" if self.vector_store is None else "initialized but empty"
+        return f"No clinical documents found in the guidelines database ({db_status}). Please refer to standard medical guidelines for '{query}'."
 
 
 # --- SINGLETON INSTANCE MANAGEMENT ---
@@ -225,6 +241,12 @@ _rag_instance = None
 def get_rag_engine(load_documents: bool = False) -> RAGEngine:
     """
     Get or create RAGEngine instance (singleton pattern).
+    
+    Args:
+        load_documents: Force reload of PDF guidelines into vector store
+        
+    Returns:
+        RAGEngine instance
     """
     global _rag_instance
     
@@ -232,6 +254,8 @@ def get_rag_engine(load_documents: bool = False) -> RAGEngine:
         if load_documents:
             logger.info("🔄 Reload requested on existing engine.")
             _rag_instance.load_pdf_guidelines()
+        return _rag_instance
+    
     logger.info("✨ Creating new RAGEngine instance...")
     _rag_instance = RAGEngine(load_documents=load_documents)
     return _rag_instance
